@@ -1,68 +1,88 @@
-# Predicción de abandono y segmentación de clientes (Telco Customer Churn)
+# Predicción de abandono de clientes (Telco Customer Churn)
 
-**Asignatura:** Machine Learning (MLY1101) · **Evaluación Parcial N°2**
+**Asignatura:** Machine Learning (MLY1101) · **Evaluación Parcial N°2** · **Caso A**
 **Integrantes:** Kimberly Bobadilla, Luna Cortés y Millaray Paillafil
-**Caso seleccionado:** Caso A, Predicción de abandono de clientes (Telco Customer Churn)
 
 ---
 
-## Índice
+## Resumen ejecutivo
+
+Una empresa de telecomunicaciones pierde ingresos cada vez que un cliente se va (*churn*). En este proyecto usamos el dataset **Telco Customer Churn (IBM)**, con 7.043 clientes, para:
+
+1. entender qué características tienen los clientes que abandonan,
+2. construir y comparar **3 modelos supervisados de clasificación** (Regresión Logística, Random Forest y Gradient Boosting),
+3. **segmentar** a los clientes con modelos no supervisados (K-Means y agrupamiento jerárquico), y
+4. traducir los resultados en recomendaciones para el negocio, revisando además el impacto ético del modelo.
+
+Los tres modelos rindieron de forma muy parecida (ROC-AUC en validación cruzada entre 0,845 y 0,848). Seleccionamos **Gradient Boosting con balanceo de clases** (ROC-AUC CV = 0,848; Average Precision CV = 0,663; ROC-AUC en test = 0,845). Con el umbral estándar de 0,50 detecta **302 de los 374 clientes que se fueron** en el conjunto de prueba (Recall = 0,807), a costa de 291 falsas alarmas. La segmentación identificó **4 perfiles** de cliente, con tasas de churn entre 7,4 % y 47,3 %.
+
+---
+
+## Tabla de contenidos
 
 1. [Descripción del problema de negocio](#1-descripción-del-problema-de-negocio)
 2. [Objetivos del proyecto](#2-objetivos-del-proyecto)
-3. [Descripción de las fuentes de datos](#3-descripción-de-las-fuentes-de-datos)
-4. [Metodología](#4-metodología)
+3. [Metodología](#3-metodología)
+4. [Descripción de las fuentes de datos](#4-descripción-de-las-fuentes-de-datos)
 5. [Análisis exploratorio de los datos (EDA)](#5-análisis-exploratorio-de-los-datos-eda)
 6. [Preparación y transformación de los datos](#6-preparación-y-transformación-de-los-datos)
 7. [Justificación de la selección de modelos](#7-justificación-de-la-selección-de-modelos)
 8. [Variables finales incluidas por modelo](#8-variables-finales-incluidas-por-modelo)
 9. [Implementación de los modelos supervisados](#9-implementación-de-los-modelos-supervisados)
 10. [Evaluación y selección del modelo](#10-evaluación-y-selección-del-modelo)
-11. [Revisión ética](#11-revisión-ética)
-12. [Aprendizaje no supervisado: segmentación de clientes](#12-aprendizaje-no-supervisado-segmentación-de-clientes)
-13. [Recomendaciones para el negocio](#13-recomendaciones-para-el-negocio)
-14. [Limitaciones y trabajo futuro](#14-limitaciones-y-trabajo-futuro)
-15. [Conclusiones](#15-conclusiones)
-
----
-
-## Resumen
-
-En este proyecto trabajamos con el dataset *Telco Customer Churn* de IBM (7.043 clientes) para predecir qué clientes tienen más probabilidad de abandonar una empresa de telecomunicaciones y para agruparlos en segmentos con características similares. Comparamos tres modelos supervisados de clasificación (Regresión Logística, Random Forest y Gradient Boosting) y aplicamos K-Means y clustering jerárquico como modelos no supervisados.
-
-Los tres modelos supervisados dieron resultados muy parecidos (ROC-AUC en validación cruzada entre 0,845 y 0,848). Elegimos **Gradient Boosting balanceado** por tener el mejor ROC-AUC y Average Precision en validación cruzada, y analizamos distintos umbrales de decisión usando únicamente datos de entrenamiento, para estudiar el equilibrio entre Precision y Recall. En el conjunto de prueba, el umbral 0,69 ofrece mayor Precision que 0,50, aunque reduce el Recall. En el conjunto de prueba obtuvo ROC-AUC de 0,845, Precision de 0,651 y Recall de 0,588 con ese umbral. La segmentación con K-Means (k = 4) permitió identificar cuatro perfiles de clientes, con tasas de churn entre 7,4 % y 47,3 %.
+11. [Variables más importantes](#11-variables-más-importantes)
+12. [Revisión ética y de sesgos](#12-revisión-ética-y-de-sesgos)
+13. [Aprendizaje no supervisado: segmentación de clientes](#13-aprendizaje-no-supervisado-segmentación-de-clientes)
+14. [Recomendaciones de negocio](#14-recomendaciones-de-negocio)
+15. [Limitaciones y trabajo futuro](#15-limitaciones-y-trabajo-futuro)
+16. [Conclusiones](#16-conclusiones)
 
 ---
 
 ## 1. Descripción del problema de negocio
 
-Una empresa de telecomunicaciones pierde ingresos cada vez que un cliente se va (*churn*). Además, retener a un cliente cuesta menos que conseguir uno nuevo, por lo que le conviene saber con anticipación quiénes tienen más riesgo de irse para enfocar ahí sus ofertas de retención.
+Una empresa de telecomunicaciones pierde ingresos cuando un cliente cancela el servicio. Retener a un cliente cuesta menos que conseguir uno nuevo, por lo que conviene **anticiparse** e identificar quiénes tienen más probabilidad de irse para enfocar en ellos las ofertas de retención.
 
-El problema se plantea como una **clasificación binaria**: `0` es un cliente que se queda y `1` es un cliente que abandona. El modelo no busca reemplazar la decisión de una persona, sino ayudar a priorizar a qué clientes contactar y cómo usar mejor el presupuesto de retención.
+El problema se plantea como una **clasificación binaria**: `0` = el cliente se queda y `1` = el cliente abandona. Además de predecir, queremos **agrupar** a los clientes en segmentos con características parecidas, porque no todos se van por las mismas razones y una sola campaña para toda la cartera sería poco eficiente.
 
-Como complemento, hicimos una **segmentación** de la cartera. La idea es que la empresa no aplique la misma estrategia a todos los clientes, sino que ajuste las acciones según el perfil y el nivel de riesgo de cada grupo.
+El modelo no busca reemplazar una decisión humana, sino **apoyar la priorización** de a quién contactar.
 
 ## 2. Objetivos del proyecto
 
-### 2.1 Objetivo general
+**Objetivo general:** desarrollar y evaluar modelos de Machine Learning que identifiquen clientes con riesgo de abandono y los segmenten según sus características, para apoyar decisiones de retención.
 
-Desarrollar y evaluar modelos de Machine Learning que permitan identificar clientes con riesgo de abandono y segmentarlos según sus características, para apoyar decisiones de retención.
+**Objetivos específicos:**
 
-### 2.2 Objetivos específicos
+1. Analizar qué características tienen los clientes que abandonan (EDA) y revisar la calidad de los datos.
+2. Preparar los datos para el modelamiento (codificación, división train/test, balanceo de clases).
+3. Construir y comparar 3 modelos supervisados de clasificación con validación cruzada y ajuste de hiperparámetros.
+4. Agrupar a los clientes con un modelo no supervisado (K-Means), comparándolo con agrupamiento jerárquico.
+5. Evaluar con métricas adecuadas a un problema desbalanceado e interpretarlas para el negocio.
+6. Revisar el impacto ético del modelo (sesgo por género y por adultos mayores).
+7. Entregar recomendaciones de negocio.
 
-1. Analizar qué características tienen los clientes que abandonan (EDA).
-2. Revisar la calidad de los datos: nulos y duplicados.
-3. Preparar las variables para el entrenamiento de los modelos.
-4. Construir y comparar tres modelos supervisados de clasificación: Regresión Logística, Random Forest y Gradient Boosting.
-5. Ajustar los hiperparámetros con validación cruzada y `GridSearchCV`.
-6. Evaluar los modelos con métricas adecuadas a un problema desbalanceado (Precision, Recall, F1, ROC-AUC y Average Precision) y estudiar el efecto del umbral de decisión en el equilibrio entre Precision y Recall.
-7. Agrupar a los clientes con modelos no supervisados (K-Means y clustering jerárquico).
-8. Revisar el impacto ético del modelo, en particular posibles diferencias de error entre grupos.
-9. Proponer recomendaciones de negocio a partir de los resultados.
+## 3. Metodología
 
-## 3. Descripción de las fuentes de datos
+Seguimos una adaptación de **CRISP-DM**. La siguiente tabla muestra en qué parte de este informe y del notebook se desarrolla cada etapa:
 
-Usamos el dataset **Telco Customer Churn (IBM)**. La versión con la que trabajamos es una versión limpia guardada en `data/Telco_Customer_Churn_Clean.csv`, que tiene **7.043 clientes y 20 variables**. No incluye el identificador `customerID`.
+| Etapa CRISP-DM | Qué hicimos | Sección del informe |
+|---|---|---|
+| Comprensión del negocio | Definimos el problema de churn, los objetivos y el tipo de modelos | 1, 2 |
+| Comprensión de los datos | Calidad de datos, distribución de `Churn`, EDA numérico y categórico, correlaciones | 4, 5 |
+| Preparación de los datos | Codificación *one-hot*, exclusión de `gender`, división estratificada 80/20, manejo del desbalance | 6 |
+| Modelado | 3 modelos supervisados con `GridSearchCV` y 2 algoritmos de clustering | 7, 8, 9, 13 |
+| Evaluación | Validación cruzada, evaluación en test, curvas ROC y PR, auditoría ética, estabilidad del clustering | 10, 11, 12, 13 |
+| Despliegue / uso | Recomendaciones de negocio, limitaciones y modelos guardados en `models/` | 14, 15 |
+
+**Herramientas:** Python en Google Colab con Pandas, NumPy, Matplotlib, Seaborn, Scikit-learn y Joblib. Usamos `random_state = 42` en todo el proyecto para que los resultados sean reproducibles.
+
+## 4. Descripción de las fuentes de datos
+
+**Fuente:** *Telco Customer Churn* (IBM). Usamos una **versión limpia** del dataset, que preparamos en la evaluación anterior y que está guardada en `data/Telco_Customer_Churn_Clean.csv`.
+
+- **Tamaño:** 7.043 clientes y 20 variables.
+- **Identificador:** el dataset no incluye `customerID`.
+- **Variable objetivo:** `Churn` (`Yes` / `No`).
 
 | Grupo | Variables |
 |---|---|
@@ -70,147 +90,112 @@ Usamos el dataset **Telco Customer Churn (IBM)**. La versión con la que trabaja
 | Servicios contratados | `PhoneService`, `MultipleLines`, `InternetService`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies` |
 | Contrato y pago | `Contract`, `PaperlessBilling`, `PaymentMethod` |
 | Numéricas | `tenure` (meses de antigüedad), `MonthlyCharges`, `TotalCharges` |
-| Variable objetivo | `Churn` (Yes/No) |
-
-## 4. Metodología
-
-Seguimos una versión adaptada de **CRISP-DM**: comprensión del negocio, comprensión de los datos, preparación, modelado, evaluación y recomendaciones. A esas etapas les agregamos una de segmentación no supervisada y una revisión ética.
-
-Trabajamos en Python con Google Colab y las librerías pandas, NumPy, Matplotlib, Seaborn y scikit-learn. Para que los resultados se puedan reproducir fijamos `random_state = 42` en todo el proyecto.
-
----
+| Objetivo | `Churn` |
 
 ## 5. Análisis exploratorio de los datos (EDA)
 
 ### 5.1 Calidad de los datos
 
-Revisamos el tamaño del dataset, los tipos de dato, los valores nulos, los duplicados y los estadísticos de las variables numéricas.
+Revisamos el tamaño, los tipos de datos, los nulos, los duplicados y los estadísticos descriptivos.
 
-- **Nulos:** en la versión limpia, `TotalCharges` ya está en formato numérico y los valores faltantes se trataron antes del modelamiento.
-- **Duplicados:** hay **22 filas repetidas (0,3 %)**. Como el dataset lo limpiamos nosotras en la evaluación anterior podemos asegurar que apesar de no contar con  `CustomerID` son clientes distintos.
-- **`TotalCharges = 0`:** corresponde a **11 clientes con `tenure = 0`** (clientes nuevos que todavía no reciben su primera factura). Son registros válidos, por lo que se mantuvieron.
+- **Nulos:** en la versión limpia `TotalCharges` ya está en formato numérico y los faltantes fueron tratados en la evaluación anterior.
+- **Duplicados:** se detectaron **22 filas repetidas (0,3 %)**. Como el dataset no tiene `customerID`, no se puede saber si son la misma persona, pero dos clientes distintos pueden tener exactamente las mismas características. Además, nosotras mismas limpiamos el dataset en la evaluación anterior. Por eso **las conservamos**.
+- **`TotalCharges = 0`:** corresponde a **11 clientes con `tenure = 0`** (clientes nuevos que aún no reciben su primera factura). Los mantuvimos porque son registros válidos.
 
 ### 5.2 Variable objetivo
 
-| Churn | Cantidad | Porcentaje |
+| Churn | Clientes | Porcentaje |
 |---|---|---|
 | No | 5.174 | 73,5 % |
 | Sí | 1.869 | 26,5 % |
 
 ![Distribución de Churn](images/distribucion_churn.png)
 
-Las clases están desbalanceadas (26,5 % de abandono). Esto significa que la *accuracy* por sí sola no sirve para evaluar, porque un modelo que dijera siempre "no se va" acertaría cerca del 73 % sin detectar a nadie. Por eso usamos también Precision, Recall, F1, ROC-AUC y Average Precision, y balanceamos las clases al entrenar.
+Las clases están **moderadamente desbalanceadas**. Por eso `Accuracy` no basta para evaluar los modelos (un modelo que dijera siempre "no se va" tendría ~73,5 % de accuracy sin detectar a nadie), y complementamos con Precision, Recall, F1, ROC-AUC y Average Precision.
 
 ### 5.3 Variables numéricas
 
 ![Variables numéricas según Churn](images/variables_numericas_churn.png)
 
-| Variable (promedio) | Se quedan | Se van |
-|---|---|---|
-| `tenure` (meses) | 37,6 | 18,0 |
-| `MonthlyCharges` | 61,3 | 74,4 |
-| `TotalCharges` | 2.550 | 1.532 |
+| Grupo | Tenure promedio (meses) | MonthlyCharges promedio | TotalCharges promedio |
+|---|---|---|---|
+| Se quedan | 37,6 | 61,3 | 2.550 |
+| Abandonan | 18,0 | 74,4 | 1.532 |
 
-Los clientes que se van tienen la mitad de antigüedad y pagan más al mes. El `TotalCharges` más bajo no es un hallazgo por sí mismo, ya que sale simplemente de que llevan menos tiempo como clientes. Los clientes antiguos casi no se van.
+Los clientes que abandonan tienen **menos antigüedad y pagan más al mes**. Su `TotalCharges` es menor simplemente porque llevan menos tiempo contratados. Los clientes antiguos casi no se van.
 
 ### 5.4 Variables categóricas
 
-![Churn según variables categóricas](images/variables_categoricas_churn.png)
+![Variables categóricas según Churn](images/variables_categoricas_churn.png)
 
-| Variable | Tasa de churn observada |
+| Variable | Tasa de churn |
 |---|---|
-| Contrato | Mes a mes: 42,7 % · 1 año: 11,3 % · 2 años: 2,8 % |
-| Internet | Fibra óptica: 41,9 % · DSL: 19,0 % · Sin internet: 7,4 % |
-| Método de pago | Cheque electrónico: 45,3 % · otros métodos: entre 15,2 % y 19,1 % |
-| Soporte técnico | Sin soporte: 41,6 % · Con soporte: 15,2 % |
-| Adulto mayor (`SeniorCitizen`) | Adultos mayores: 41,7 % · resto: 23,6 % |
-| Género | Mujeres: 26,9 % · Hombres: 26,2 % (sin diferencia relevante) |
-
-El riesgo se concentra en clientes con contrato mes a mes, fibra óptica, pago con cheque electrónico y sin soporte técnico. Son asociaciones que aparecen en los datos, pero no demuestran que esas características *causen* el abandono.
+| **Contrato** | Mes a mes: 42,7 % · 1 año: 11,3 % · 2 años: 2,8 % |
+| **Internet** | Fibra óptica: 41,9 % · DSL: 19,0 % · Sin internet: 7,4 % |
+| **Método de pago** | Cheque electrónico: 45,3 % · otros métodos: entre 15,2 % y 19,1 % |
+| **Soporte técnico** | Sin soporte: 41,6 % · con soporte: 15,2 % |
+| **Adulto mayor** | Sí: 41,7 % · No: 23,6 % |
+| **Género** | Mujeres: 26,9 % · Hombres: 26,2 % (sin diferencia relevante) |
 
 ### 5.5 Correlaciones
 
 ![Matriz de correlación](images/matriz_correlacion.png)
 
-- `tenure` tiene una correlación negativa moderada con el churn (**−0,35**): mientras más nuevo el cliente, más probable que se vaya.
+- `tenure` tiene una correlación negativa moderada con el churn (**−0,35**): los clientes nuevos son más propensos a irse.
 - `MonthlyCharges` tiene una relación positiva leve con el churn (**0,19**).
-- `TotalCharges` y `tenure` están muy correlacionadas (**0,83**). Esta multicolinealidad nos llevó a excluir `TotalCharges` de la Regresión Logística (ver secciones 6 y 8).
+- `TotalCharges` y `tenure` están muy correlacionadas (**0,83**). Esta multicolinealidad puede distorsionar a los modelos lineales, así que más adelante excluimos `TotalCharges` de la Regresión Logística.
 
----
+> Estos resultados muestran **asociaciones**, no causalidad.
 
 ## 6. Preparación y transformación de los datos
 
-1. **Variable objetivo:** `Churn` se transformó a binaria (`No` = 0, `Yes` = 1).
-2. **Exclusión de `gender`:** se sacó de las variables predictoras por criterio ético. Se conservó solo para auditar el modelo después (sección 11).
-3. **Codificación:** las variables categóricas se transformaron con *One-Hot Encoding* (`pd.get_dummies` con `drop_first=True`). Quedaron **29 variables predictoras** en total.
-4. **División train/test:** 80 % para entrenamiento (5.634 clientes) y 20 % para prueba (1.409 clientes), con `random_state = 42` y `stratify = y`, de modo que ambos conjuntos mantengan la misma proporción de churn (26,5 %).
-5. **Escalado:** solo se aplicó `StandardScaler` a la Regresión Logística (dentro de un *pipeline*, para que el escalador se ajuste únicamente con los datos de entrenamiento de cada fold). Los modelos basados en árboles no lo necesitan.
-6. **Desbalance de clases:** se trató con `class_weight='balanced'` en Regresión Logística y Random Forest, y con pesos de muestra balanceados (`sample_weight`) en Gradient Boosting, ya que este modelo no tiene el parámetro `class_weight`.
-7. **Validación:** los tres modelos usan los mismos **5 folds estratificados** (`StratifiedKFold`, con `shuffle=True`).
-
----
+1. **Variable objetivo:** `Churn` se transformó a binario (`No` = 0, `Yes` = 1).
+2. **Exclusión de `gender`:** la sacamos de los predictores por criterio ético, pero la conservamos aparte para la auditoría de sesgo (sección 12).
+3. **Codificación:** las variables categóricas se convirtieron con *One-Hot Encoding* (`pd.get_dummies(..., drop_first=True)`). El resultado son **29 variables predictoras**.
+4. **División train/test:** 80 % entrenamiento (5.634 clientes) y 20 % prueba (1.409 clientes), con `stratify=y` para mantener la misma proporción de churn (26,5 %) en ambos conjuntos.
+5. **Escalado:** `StandardScaler` solo para la Regresión Logística (dentro de un *pipeline*, para no filtrar información del test). Random Forest y Gradient Boosting no lo necesitan.
+6. **Desbalance de clases:** `class_weight='balanced'` en Regresión Logística y Random Forest, y `sample_weight` balanceado en Gradient Boosting (que no tiene `class_weight`).
+7. **Validación:** los tres modelos usan los mismos **5 folds estratificados** (`StratifiedKFold`, `shuffle=True`, `random_state=42`).
 
 ## 7. Justificación de la selección de modelos
 
-Elegimos tres modelos que representan enfoques distintos, para poder comparar un modelo lineal contra modelos basados en árboles.
+Elegimos tres clasificadores que representan enfoques distintos, para comparar un modelo lineal con modelos basados en árboles:
 
 | Modelo | Por qué lo elegimos |
 |---|---|
-| **Regresión Logística** | Es la línea base. Es simple, interpretable y sus coeficientes permiten ver la dirección en que cada variable afecta el riesgo de churn. |
-| **Random Forest** | Captura relaciones no lineales e interacciones entre variables sin necesitar escalado, y entrega una medida orientativa de importancia de variables. |
-| **Gradient Boosting** | Combina árboles de forma secuencial y suele tener muy buen rendimiento en datos tabulares como este. |
+| **Regresión Logística** | Línea base simple e interpretable. Sus coeficientes permiten explicar en qué dirección influye cada variable. |
+| **Random Forest** | Captura relaciones no lineales e interacciones entre variables, es robusto al ruido y entrega una importancia de variables (orientativa). |
+| **Gradient Boosting** | Suele tener muy buen rendimiento en datos tabulares porque corrige errores de forma secuencial con árboles pequeños. |
 
----
+Como referencia, entrenamos además un **Gradient Boosting sin balancear**, solo para mostrar el efecto del balanceo de clases.
 
 ## 8. Variables finales incluidas por modelo
 
 | Modelo | N° de variables | Variable excluida | Escalado | Tratamiento del desbalance |
 |---|---|---|---|---|
-| Regresión Logística | 28 | `TotalCharges` (colinealidad con `tenure`) | `StandardScaler` (en pipeline) | `class_weight='balanced'` |
-| Random Forest | 29 | Ninguna | No necesita | `class_weight='balanced'` |
-| Gradient Boosting | 29 | Ninguna | No necesita | `sample_weight` balanceado |
+| Regresión Logística | 28 | `TotalCharges` (colinealidad con `tenure`, 0,83) | `StandardScaler` (en pipeline) | `class_weight='balanced'` |
+| Random Forest | 29 | ninguna | no necesita | `class_weight='balanced'` |
+| Gradient Boosting | 29 | ninguna | no necesita | `sample_weight` balanceado |
 
-En todos los casos `gender` ya estaba fuera. Se excluyó `TotalCharges` solo de la Regresión Logística porque este modelo es sensible a la multicolinealidad (sus coeficientes se vuelven inestables), mientras que los modelos de árboles no tienen ese problema.
-
----
+Las 29 variables corresponden a las numéricas (`SeniorCitizen`, `tenure`, `MonthlyCharges`, `TotalCharges`) y a las variables categóricas codificadas (por ejemplo `Contract_One year`, `Contract_Two year`, `InternetService_Fiber optic`, `InternetService_No`, `PaymentMethod_Electronic check`, `OnlineSecurity_Yes`, `TechSupport_Yes`, etc.). El listado completo se imprime en el notebook (sección *Variables Finales por Modelo*).
 
 ## 9. Implementación de los modelos supervisados
 
-Los hiperparámetros de cada modelo se ajustaron con `GridSearchCV`, usando ROC-AUC como métrica y los mismos 5 folds estratificados.
+Los hiperparámetros se ajustaron con `GridSearchCV` usando los 5 folds estratificados y **ROC-AUC** como métrica, de modo que la elección no depende de una sola división de los datos.
 
-| Modelo | Grilla de búsqueda | Mejores hiperparámetros | AUC (GridSearchCV) |
+| Modelo | Malla de búsqueda | Mejores hiperparámetros | AUC (GridSearchCV) |
 |---|---|---|---|
 | Regresión Logística | `C` ∈ {0,01; 0,1; 1; 10} | `C = 10` | 0,845 |
-| Random Forest | `n_estimators` ∈ {100, 200}; `max_depth` ∈ {5, 8, 12}; `min_samples_leaf` ∈ {1, 5, 10} | `n_estimators = 200`; `max_depth = 8`; `min_samples_leaf = 10` | 0,848 |
-| Gradient Boosting | `n_estimators` ∈ {100, 200}; `learning_rate` ∈ {0,05; 0,1}; `max_depth` ∈ {2, 3} | `n_estimators = 200`; `learning_rate = 0,05`; `max_depth = 2` | 0,849 |
+| Random Forest | `n_estimators` ∈ {100, 200}; `max_depth` ∈ {5, 8, 12}; `min_samples_leaf` ∈ {1, 5, 10} | `n_estimators=200`, `max_depth=8`, `min_samples_leaf=10` | 0,848 |
+| Gradient Boosting | `n_estimators` ∈ {100, 200}; `learning_rate` ∈ {0,05; 0,1}; `max_depth` ∈ {2, 3} | `n_estimators=200`, `learning_rate=0,05`, `max_depth=2` | 0,849 |
 
-### Justificación de los rangos de las grillas
-
-Elegimos rangos pequeños y de uso común, con la idea de cubrir desde modelos simples hasta modelos más flexibles sin hacer la búsqueda demasiado costosa. Cada combinación se entrena 5 veces (una por fold), así que el tamaño de la grilla importa: la de Random Forest tiene 18 combinaciones (90 entrenamientos) y las de Regresión Logística y Gradient Boosting, 4 y 8 combinaciones respectivamente.
-
-| Modelo | Hiperparámetro | Valores | Por qué ese rango |
-|---|---|---|---|
-| Regresión Logística | `C` | 0,01; 0,1; 1; 10 | `C` es el inverso de la regularización. Lo exploramos en escala logarítmica, que es lo habitual, para pasar de una regularización fuerte (0,01) a una débil (10). `C = 1` es el valor por defecto de scikit-learn y sirve de punto de referencia. |
-| Random Forest | `n_estimators` | 100, 200 | 100 es el valor por defecto. Con más árboles el error se estabiliza y la mejora es cada vez menor, así que probamos 200 para ver si había ganancia sin aumentar demasiado el tiempo de cómputo. |
-| Random Forest | `max_depth` | 5, 8, 12 | Controla el sobreajuste. Con 5 los árboles son poco profundos (modelo más simple), con 12 son bastante flexibles y 8 queda en el medio. No incluimos árboles sin límite de profundidad porque tienden a memorizar el entrenamiento. |
-| Random Forest | `min_samples_leaf` | 1, 5, 10 | Define el mínimo de clientes por hoja. Con 1 las hojas pueden ser muy específicas; con 5 y 10 se exige más evidencia por hoja, lo que suaviza las predicciones y ayuda a generalizar. |
-| Gradient Boosting | `n_estimators` | 100, 200 | Misma lógica que en Random Forest, y además está ligado a `learning_rate`: con una tasa más baja se necesitan más árboles. |
-| Gradient Boosting | `learning_rate` | 0,05; 0,1 | 0,1 es el valor por defecto. Probamos también un paso más chico (0,05), que aprende más lento pero suele generalizar mejor. |
-| Gradient Boosting | `max_depth` | 2, 3 | En boosting se usan árboles poco profundos (aprendices débiles), porque cada árbol corrige los errores del anterior. Por eso el rango es más corto que en Random Forest. |
-
-**Limitación de las grillas:** varios de los mejores valores quedaron en el borde del rango que probamos (`C = 10`, `min_samples_leaf = 10`, `n_estimators = 200`, `learning_rate = 0,05` y `max_depth = 2`). Eso sugiere que podría haber combinaciones algo mejores fuera de la grilla. Como los tres modelos ya están prácticamente empatados en ROC-AUC (0,845 a 0,848), creemos que la ganancia sería pequeña, pero una búsqueda más amplia (por ejemplo con `RandomizedSearchCV`) queda como trabajo futuro.
-
-Además entrenamos un **Gradient Boosting sin balancear** como referencia, solo para ver qué efecto tiene el balanceo de clases.
-
-Los modelos entrenados se guardaron con `joblib` en la carpeta `models/` (`regresion_logistica.pkl`, `random_forest.pkl` y `gradient_boosting.pkl`).
-
----
+Los tres modelos finales se guardaron con `joblib` en la carpeta `models/` (`regresion_logistica.pkl`, `random_forest.pkl`, `gradient_boosting.pkl`).
 
 ## 10. Evaluación y selección del modelo
 
-### 10.1 Comparación en validación cruzada
+### 10.1 Selección en validación cruzada
 
-Para comparar los tres modelos bajo las mismas condiciones, generamos predicciones *fuera de fold* (`cross_val_predict`) sobre el conjunto de entrenamiento. Así cada cliente se predice con un modelo que no lo vio al entrenar, sin fuga de datos.
+Para comparar los tres modelos bajo el mismo esquema, generamos **predicciones fuera de fold** (`cross_val_predict`) sobre el conjunto de entrenamiento. Así evitamos mirar el test para decidir.
 
 | Modelo | ROC-AUC (CV) | Average Precision (CV) |
 |---|---|---|
@@ -218,56 +203,40 @@ Para comparar los tres modelos bajo las mismas condiciones, generamos prediccion
 | Random Forest | 0,847 | 0,661 |
 | **Gradient Boosting (balanceado)** | **0,848** | **0,663** |
 
-> Los valores de la sección 9 (promedio del AUC por fold) y los de esta tabla (AUC calculado sobre todas las predicciones fuera de fold juntas) difieren en el tercer decimal porque se calculan de forma distinta.
+Las diferencias están dentro del ruido de la validación cruzada. Aun así, **seleccionamos Gradient Boosting balanceado** por tener el mayor ROC-AUC y Average Precision en CV. Este criterio se definió **antes de mirar el test**.
 
-Los tres modelos quedan prácticamente empatados, y la diferencia está dentro del ruido de la validación cruzada. Aun así, elegimos **Gradient Boosting balanceado** porque tuvo el mayor ROC-AUC y el mayor Average Precision, y este criterio lo definimos **antes de mirar el conjunto de prueba**. Usamos Average Precision como apoyo porque es más sensible que el ROC-AUC cuando la clase de interés es la minoritaria.
+### 10.2 Evaluación final en el conjunto de prueba (umbral 0,50)
 
-### 10.2 Resultados en el conjunto de prueba
+| Modelo | Accuracy | Precision | Recall | F1 | ROC-AUC |
+|---|---|---|---|---|---|
+| Regresión Logística | 0,742 | 0,509 | 0,775 | 0,614 | 0,838 |
+| Random Forest | 0,754 | 0,525 | 0,783 | 0,629 | 0,845 |
+| **Gradient Boosting (balanceado)** | 0,742 | 0,509 | **0,807** | 0,625 | 0,845 |
+| Gradient Boosting sin balancear (referencia) | 0,798 | 0,656 | 0,500 | 0,568 | 0,846 |
 
-Primero comparamos todos los modelos con el umbral estándar de 0,5, para que la comparación sea justa. Para el modelo elegido agregamos además el umbral optimizado (sección 10.3).
-
-| Modelo | Umbral | Accuracy | Precision | Recall | F1 | ROC-AUC |
-|---|---|---|---|---|---|---|
-| Regresión Logística | 0,50 | 0,742 | 0,509 | 0,775 | 0,614 | 0,838 |
-| Random Forest | 0,50 | 0,754 | 0,525 | 0,783 | 0,629 | 0,845 |
-| Gradient Boosting (balanceado) | 0,50 | 0,742 | 0,509 | 0,807 | 0,625 | 0,845 |
-| Gradient Boosting sin balancear (referencia) | 0,50 | 0,798 | 0,656 | 0,500 | 0,568 | 0,846 |
-| **Gradient Boosting final (umbral optimizado)** | **0,69** | **0,807** | **0,651** | **0,588** | **0,618** | **0,845** |
-
-**Cómo interpretamos estos resultados:**
-
-- A umbral 0,5, Random Forest tiene accuracy y F1 levemente mejores (0,754 y 0,629 contra 0,742 y 0,625). Aun así mantuvimos Gradient Boosting porque lo elegimos por su desempeño en validación cruzada, no por el test. En general las diferencias entre los tres modelos son pequeñas.
-- El Gradient Boosting **sin balancear** tiene la accuracy más alta (0,798), pero su Recall es solo 0,500: deja pasar a la mitad de los clientes que se van. Esto confirma que en este problema la accuracy engaña, y que el balanceo de clases sí cumple su función.
-- Las curvas ROC de los tres modelos son casi idénticas, lo que es coherente con el empate en AUC. En la curva Precision-Recall, Gradient Boosting y Random Forest mantienen una precisión algo mayor que la Regresión Logística cuando el recall está entre 0,0 y 0,6.
+![Matrices de confusión](images/matrices_confusion_comparacion.png)
 
 ![Curvas ROC y Precision-Recall](images/curvas_roc_precision_recall.png)
 
-### 10.3 Matrices de confusión y umbral de decisión
+### 10.3 Interpretación de las métricas
 
-![Matrices de confusión comparativas](images/matrices_confusion_comparacion.png)
+- **ROC-AUC ≈ 0,845:** si tomamos un cliente que se fue y uno que se quedó al azar, el modelo le asigna mayor probabilidad de churn al que se fue en cerca del 84,5 % de los casos. Las curvas ROC de los tres modelos son casi idénticas, coherente con el empate en AUC.
+- **Average Precision (CV) = 0,663:** la proporción base de churn es 26,5 %, así que el modelo rinde unas 2,5 veces mejor que elegir al azar. En la curva Precision-Recall, Gradient Boosting y Random Forest mantienen una precisión algo mayor que la Regresión Logística en recall bajo y medio (entre 0,0 y 0,6).
+- **Matriz de confusión de Gradient Boosting (umbral 0,50):** detecta **302 de 374** clientes que realmente se van (Recall = 0,807), deja pasar 72 y genera **291 falsos positivos**. Esto significa que, de los ~593 clientes marcados en riesgo, aproximadamente la mitad (Precision = 0,509) se iba a ir de verdad.
+- **Efecto del balanceo:** sin balancear, el modelo tiene más accuracy (0,798) pero **solo detecta al 50 % de quienes se van** (Recall = 0,500). Para un problema de retención, perder la mitad de los clientes en fuga es un costo alto, por eso preferimos la versión balanceada.
+- **Accuracy y F1 de Random Forest:** a umbral 0,50 Random Forest es levemente superior (0,754 y 0,629 contra 0,742 y 0,625). Mantenemos Gradient Boosting por el criterio definido de antemano en CV y porque tiene el mayor Recall, que es lo más importante para no dejar escapar clientes. Reconocemos que **las diferencias entre los tres modelos son pequeñas**.
 
-Para el Gradient Boosting balanceado, en el conjunto de prueba (374 clientes realmente se van, 1.035 se quedan):
+### 10.4 Umbral de decisión
 
-| | Umbral 0,50 | Umbral 0,69 |
-|---|---|---|
-| Churn detectado correctamente (TP) | 302 | 220 |
-| Falsas alarmas (FP) | 291 | 118 |
-| Churn no detectado (FN) | 72 | 154 |
-| Correctamente identificados como "se quedan" (TN) | 744 | 917 |
-| Recall | 0,807 | 0,588 |
-| Precision | 0,509 | 0,651 |
+Usamos el umbral estándar de **0,50** para comparar los modelos en igualdad de condiciones y lo mantuvimos como umbral operativo. Subirlo reduciría las falsas alarmas (más Precision) a costa de dejar escapar más clientes (menos Recall). La elección ideal depende del costo real de una oferta de retención frente al ingreso perdido por un cliente, información que no tenemos. Dejamos esta calibración como trabajo futuro (sección 15).
 
-Al subir el umbral de 0,50 a 0,69 las falsas alarmas bajan de 291 a 118, es decir, se evita ofrecer descuentos a muchos clientes que no se iban a ir. El costo es que quedan sin detectar 154 clientes que sí se van (antes eran 72). Esta diferencia es importante para el negocio, porque permite dirigir la campaña a un grupo más chico y más certero.
+## 11. Variables más importantes
 
-**Selección del umbral:** se compararon distintos umbrales a partir de las predicciones fuera de fold del conjunto de entrenamiento, sin utilizar el conjunto de prueba para tomar esta decisión. El umbral 0,69 representa una alternativa con mayor Precision y menor Recall que el umbral estándar de 0,50. Su conveniencia operativa debe evaluarse según los objetivos de la empresa y, si corresponde, con información real de costos y retención.
+![Top 10 variables Random Forest](images/importancia_variables_rf.png)
 
-![Beneficio según umbral](images/beneficio_segun_umbral.png)
+Random Forest (importancia basada en impureza, solo orientativa) destaca estas variables:
 
-### 10.4 Variables más importantes
-
-![Top 10 variables, Random Forest](images/importancia_variables_rf.png)
-
-| Variable | Importancia (Random Forest) |
+| Variable | Importancia |
 |---|---|
 | `tenure` | 0,182 |
 | `Contract_Two year` | 0,134 |
@@ -280,114 +249,111 @@ Al subir el umbral de 0,50 a 0,69 las falsas alarmas bajan de 291 a 118, es deci
 | `TechSupport_Yes` | 0,030 |
 | `InternetService_No` | 0,023 |
 
-Esta importancia está basada en impureza, por lo que la tomamos solo como una guía orientativa. Para ver la **dirección** de las relaciones usamos los coeficientes de la Regresión Logística (con variables estandarizadas): la antigüedad (−0,76) y los contratos de uno y dos años (−0,30 y −0,62) reducen el riesgo de churn, mientras que la fibra óptica lo aumenta (+1,29). Estas relaciones son predictivas, no causales.
+En la Regresión Logística (variables estandarizadas) los coeficientes confirman la dirección de las relaciones: la **antigüedad (−0,76)** y los **contratos de uno (−0,30) y dos años (−0,62)** reducen el riesgo de churn, mientras que la **fibra óptica (+1,29)** lo aumenta.
 
----
+Ambos modelos coinciden con el EDA: el riesgo se concentra en clientes nuevos, con contrato mes a mes y fibra óptica. Son relaciones **predictivas**, no necesariamente causales.
 
-## 11. Revisión ética
+## 12. Revisión ética y de sesgos
 
 **Decisiones tomadas:**
 
-- `gender` se **excluyó del entrenamiento** para que el modelo no use el género en sus decisiones. En el EDA tampoco mostraba diferencia relevante, por lo que excluirla no tiene costo.
-- Se **conservó solo para auditar** los resultados del modelo final (Gradient Boosting con umbral 0,69, en test).
-- `SeniorCitizen` **sí se mantuvo** como predictora, porque separa mucho el churn en el EDA (41,7 % contra 23,6 %). Como el modelo se usa para decidir a quién ofrecer un incentivo y no para negar un servicio, el perjuicio de un falso positivo es bajo (recibir una oferta que no se necesitaba). No medimos cuánto cambiaría el desempeño al excluirla, por lo que lo dejamos como trabajo futuro.
+- Excluimos `gender` del entrenamiento para que el modelo no use directamente el género.
+- Conservamos `gender` y `SeniorCitizen` aparte para **auditar** el desempeño por grupo en el conjunto de test (modelo Gradient Boosting, umbral 0,50).
 
-**Auditoría por grupo (test, umbral 0,69):**
-
-| Grupo | Recall | Precision | Falsos positivos |
+| Grupo | % churn real | Recall | Falsos positivos |
 |---|---|---|---|
-| Mujeres | 0,60 | 0,68 | 10,93 % |
-| Hombres | 0,58 | 0,62 | 11,83 % |
-| No adulto mayor | 0,56 | 0,63 | 9,88 % |
-| Adulto mayor | 0,66 | 0,70 | 22,58 % |
+| Mujeres | — | 0,78 | 27,13 % |
+| Hombres | — | 0,83 | 29,02 % |
+| No adultos mayores | 23,25 % | — | 25,36 % |
+| Adultos mayores | 44,14 % | — | 48,39 % |
 
-- **Género:** los resultados son similares entre mujeres y hombres (recall cercano a 0,59), así que no vemos diferencias relevantes.
-- **Adultos mayores:** la tasa de falsos positivos es **22,58 % contra 9,88 %** en el resto. Es una disparidad de errores. En parte se explica porque este grupo tiene más churn real (44,14 % contra 23,25 % en el test), pero **no podemos descartar que haya sesgo**.
+**Hallazgos:**
 
-**Mitigaciones posibles:** excluir `SeniorCitizen`, ajustar el umbral por grupo o exigir revisión humana antes de contactar al cliente. También habría que usar solo los datos necesarios, limitar el acceso a ellos (privacidad) y monitorear el desempeño del modelo en el tiempo.
+- **Género:** los resultados son parejos entre mujeres y hombres. Excluir la variable no empeoró el modelo.
+- **Adultos mayores:** hay una **disparidad clara de errores**. La tasa de falsos positivos llega a 48,39 %, frente a 25,36 % en el resto. Parte de la brecha se explica porque su churn real también es mayor (44,14 % contra 23,25 %), pero **no descartamos un sesgo** del algoritmo.
 
----
+**Decisión:** mantuvimos `SeniorCitizen` como predictor por su valor explicativo en el EDA. El modelo se usaría para **ofrecer un incentivo de retención**, no para negar un servicio, por lo que el costo de un falso positivo es bajo (un cliente recibe una oferta que quizás no necesitaba). Aun así, antes de usarlo en producción proponemos evaluar: excluir la variable, ajustar umbrales por grupo y mantener una revisión humana previa a la acción comercial.
 
-## 12. Aprendizaje no supervisado: segmentación de clientes
+**Privacidad:** el dataset no contiene identificadores personales. En un uso real habría que limitar el acceso a los datos, usar solo la información necesaria y monitorear el modelo periódicamente.
 
-**Por qué segmentar:** el modelo supervisado dice *quién* tiene riesgo, pero no *qué tipo de cliente* es. La segmentación agrega esa mirada y permite diseñar acciones distintas para cada grupo.
+## 13. Aprendizaje no supervisado: segmentación de clientes
 
-**Datos usados:** las mismas 28 variables de la Regresión Logística (sin `TotalCharges`, por su colinealidad con `tenure`), estandarizadas con `StandardScaler`. La variable `Churn` **no** se usó para construir los clusters; solo se usó después para describir el nivel de abandono de cada grupo.
+**Objetivo:** encontrar grupos de clientes con características parecidas para diseñar acciones distintas según el perfil. Es un complemento a la predicción: el modelo supervisado dice *quién* tiene riesgo y la segmentación ayuda a entender *qué tipo de cliente* es.
 
-**Algoritmos:** K-Means y clustering jerárquico aglomerativo con enlace Ward.
+**Datos y algoritmos:** usamos las 28 variables de la Regresión Logística, escaladas con `StandardScaler`, y comparamos **K-Means** con **agrupamiento jerárquico aglomerativo (enlace Ward)**. La variable `Churn` **no** se usó para construir los clusters, solo para describirlos después.
 
-### 12.1 Elección de k
+### 13.1 Elección de k
 
-Probamos k entre 2 y 8, y comparamos inercia (método del codo), coeficiente de Silhouette (más alto es mejor) e índice de Davies-Bouldin (más bajo es mejor).
+Probamos k entre 2 y 8 con inercia (método del codo), Silhouette y Davies-Bouldin.
 
 ![Selección de k](images/seleccion_k_clustering.png)
 
-- **k = 2** tiene el mejor Silhouette (0,353) y Davies-Bouldin (1,048), pero la partición es poco útil para el negocio: solo separa a los clientes **sin internet** (1.526 clientes, 7,4 % de churn) del resto, que queda en un único grupo de 5.517 clientes (78 %) con 31,8 % de churn. Ese grupo mezcla clientes nuevos y antiguos, con DSL y con fibra, y dentro de él el churn de los segmentos de k = 4 va de 14,9 % a 47,3 %. Una sola estrategia de retención no sería adecuada.
-- **k = 4** fue nuestra elección. En el método del codo todavía hay una caída relevante de inercia (11,55 %) y subdivide ese grupo grande en tres perfiles claramente distintos en riesgo, antigüedad y facturación.
+- **k = 2** tiene el mejor Silhouette (0,353) y Davies-Bouldin (1,048), pero su partición es poco útil: solo separa a los clientes **sin internet** (1.526 clientes, 7,4 % de churn) de un único grupo de 5.517 clientes (78 %) con 31,8 % de churn que mezcla perfiles muy distintos. Dentro de ese grupo grande, el churn de los segmentos de k = 4 va de 14,9 % a 47,3 %, así que una sola estrategia no sería adecuada.
+- **k = 4** fue nuestra elección: en el codo muestra el último descenso relevante de inercia (**11,55 %**) y divide al grupo grande en perfiles con riesgo, antigüedad y facturación claramente distintos.
+- **Reconocemos una limitación:** el Silhouette con k = 4 es 0,235 en K-Means y 0,222 en el jerárquico, lo que indica una estructura **moderada a débil**. La decisión se apoya en la utilidad comercial y no solo en las métricas.
 
-Reconocemos que con k = 4 el Silhouette baja a **0,235** (K-Means) y 0,222 (jerárquico), lo que indica una estructura **moderada a débil**. Por eso la decisión se apoyó en la utilidad comercial de los segmentos y no solo en las métricas.
+### 13.2 Estabilidad de los clusters
 
-### 12.2 Estabilidad de los clusters
+| Verificación | Resultado | Interpretación |
+|---|---|---|
+| ARI de K-Means entre 10 semillas | promedio 0,999 | K-Means es muy estable |
+| ARI K-Means vs. jerárquico | 0,664 | Concordancia moderada: los segmentos tienen cierto respaldo, aunque no son idénticos |
+| Silhouette K-Means / jerárquico | 0,235 / 0,222 | Grupos con solapamiento |
 
-- Entre distintas semillas, K-Means es muy estable (ARI promedio = **0,999**).
-- Entre K-Means y el método jerárquico hay consistencia moderada (ARI = **0,664**).
+Para visualizar usamos **PCA de 2 componentes**, que explican solo el **45,5 %** de la varianza. Por eso el solapamiento del gráfico es esperable; el PCA se usó únicamente para graficar, no para segmentar.
 
-Esto respalda que los segmentos existen, aunque con un Silhouette bajo.
+![Clusters en PCA](images/visualizacion_clusters_pca.png)
 
-### 12.3 Visualización
+### 13.3 Perfil de los segmentos (K-Means, k = 4)
 
-Usamos PCA solo para visualizar los clusters en dos dimensiones. Los dos primeros componentes explican apenas **45,5 %** de la varianza, por lo que es normal ver solapamiento y no hay que sacar conclusiones fuertes del gráfico. No se usó PCA para segmentar.
+Numeramos los clusters de mayor a menor tasa de churn.
 
-![Clusters con PCA](images/visualizacion_clusters_pca.png)
-
-### 12.4 Perfil de los segmentos (K-Means, k = 4)
-
-| Cluster | Clientes | Tenure prom. (meses) | Cargo mensual prom. | Churn | Perfil principal |
+| Cluster | Clientes | Tenure prom. | Cargo mensual | Churn | Perfil principal |
 |---|---|---|---|---|---|
-| **C0** | 2.670 | 16,2 | 74,2 | **47,3 %** | Clientes nuevos, 92,7 % con contrato mes a mes, mucha fibra óptica y pocos servicios adicionales (1,5 en promedio). |
-| **C1** | 682 | 31,7 | 42,0 | 24,9 % | Clientes principalmente con DSL, cargos mensuales intermedios y riesgo moderado. |
-| **C2** | 2.165 | 53,8 | 91,1 | 14,9 % | Clientes antiguos, de alta facturación y con varios servicios adicionales. |
-| **C3** | 1.526 | 30,5 | 21,1 | **7,4 %** | Clientes sin internet, de bajo costo mensual y el menor riesgo de todos. |
+| **C0** | 2.670 | 16,2 | 74,2 | **47,3 %** | Clientes nuevos, 92,7 % con contrato mes a mes, mucha fibra óptica y pocos servicios adicionales (1,5 en promedio) |
+| **C1** | 682 | 31,7 | 42,0 | 24,9 % | Clientes con DSL, cargos mensuales intermedios y riesgo moderado |
+| **C2** | 2.165 | 53,8 | 91,1 | 14,9 % | Clientes antiguos, de alta facturación y con varios servicios agregados |
+| **C3** | 1.526 | 30,5 | 21,1 | **7,4 %** | Clientes sin internet, bajo costo mensual y el riesgo más bajo |
 
----
+**Lectura de negocio:** C0 es el segmento prioritario para retención. C2 es un segmento de **alto valor** (antiguo y de alta facturación) con riesgo bajo, que conviene cuidar. C3 casi no abandona.
 
-## 13. Recomendaciones para el negocio
+## 14. Recomendaciones de negocio
 
 | Segmento | Recomendación |
 |---|---|
-| **C0 (riesgo alto)** | Es el grupo prioritario. Hay que enfocar ahí las campañas de retención, con incentivos para pasar de contrato mes a mes a un contrato de plazo fijo, y revisar la experiencia de los clientes con fibra óptica. |
-| **C1 (riesgo intermedio)** | Campañas de fidelización moderadas y evaluar servicios adicionales que aumenten la permanencia. |
-| **C2 (clientes de valor)** | Tienen poco churn, pero son antiguos y de alta facturación. Conviene evitar descuentos masivos innecesarios y usar beneficios de fidelización para cuidar la relación. |
-| **C3 (riesgo bajo)** | Monitoreo de bajo costo y sin campañas agresivas, porque casi no abandonan. |
+| **C0 – Alto riesgo (47,3 %)** | Priorizar campañas de retención. Incentivar el paso de contrato mes a mes a contratos de 1 o 2 años (que tienen 11,3 % y 2,8 % de churn) y revisar la experiencia de los clientes con fibra óptica (41,9 % de churn). Ofrecer soporte técnico, ya que sin él el churn es 41,6 %. |
+| **C1 – Riesgo moderado (24,9 %)** | Campañas de fidelización moderadas y evaluar servicios adicionales que aumenten la permanencia. |
+| **C2 – Alto valor, bajo riesgo (14,9 %)** | Evitar descuentos masivos innecesarios; usar beneficios de fidelización para mantener la relación. |
+| **C3 – Bajo riesgo (7,4 %)** | Monitoreo de bajo costo y evitar campañas agresivas. |
 
-Para las campañas predictivas, se puede considerar el puntaje del modelo con un umbral de decisión de **0,69** si la prioridad es obtener mayor Precision, combinándolo con criterios de negocio y manteniendo **revisión humana**, en vez de automatizar la decisión por completo. El umbral debe ajustarse según los objetivos de retención y los resultados observados en una campaña piloto.
+**Uso del modelo predictivo:**
 
-## 14. Limitaciones y trabajo futuro
+- Usar el *score* de Gradient Boosting para ordenar a los clientes por riesgo y contactar primero a los de mayor probabilidad, combinándolo con el segmento al que pertenecen.
+- Con el umbral 0,50 la campaña alcanzaría a ~81 % de quienes se van, pero la mitad de los contactados no se iría. Si el costo de la oferta es alto, conviene **subir el umbral** para contactar a menos clientes con mayor certeza.
+- Mantener **revisión humana** antes de aplicar acciones comerciales, sobre todo en adultos mayores (ver sección 12).
+
+## 15. Limitaciones y trabajo futuro
 
 **Limitaciones**
 
 - El dataset es histórico y puede no representar a los clientes actuales de una empresa real.
-- Los resultados son asociaciones predictivas, no relaciones causales.
-- La segmentación con k = 4 tiene un Silhouette de 0,235, por lo que existe solapamiento entre grupos.
-- K-Means usa distancia euclidiana sobre variables *dummy*, lo que limita la representación de variables categóricas.
-- La auditoría mostró más falsos positivos en adultos mayores, lo que debe investigarse antes de usar el modelo en producción.
-- Los tres modelos rinden casi igual, así que la elección de Gradient Boosting se apoya en diferencias pequeñas.
-- Las grillas de hiperparámetros son pequeñas y varios de los mejores valores quedaron en el borde del rango (sección 9), por lo que podría haber mejores combinaciones fuera de ellas.
+- Los resultados muestran asociaciones predictivas, no relaciones causales.
+- Las diferencias entre los tres modelos son pequeñas; la elección de Gradient Boosting se apoya en diferencias mínimas de CV.
+- El clustering tiene un Silhouette de 0,235 (estructura moderada a débil) y K-Means usa distancia euclidiana sobre variables *dummy*, que no representa perfectamente variables categóricas.
+- Existe una disparidad de falsos positivos en adultos mayores.
+- El umbral de 0,50 no se optimizó con costos reales del negocio.
 
 **Trabajo futuro**
 
+- Calibrar el umbral de decisión con costos, márgenes y tasas de aceptación reales de la empresa.
+- Probar mitigaciones de sesgo: excluir `SeniorCitizen`, umbrales por grupo o revisión humana.
 - Validar el modelo con datos nuevos y monitorear cambios en el comportamiento de los clientes.
-- Revisar y ajustar el umbral según las prioridades operativas y los resultados de campañas de retención reales.
-- Medir el efecto de excluir `SeniorCitizen` y probar un umbral por grupo.
-- Ampliar la búsqueda de hiperparámetros (por ejemplo con `RandomizedSearchCV`) para confirmar que los valores del borde de las grillas no se pueden mejorar.
-- Comparar otras técnicas de segmentación (por ejemplo, algoritmos pensados para variables categóricas).
+- Comparar otras técnicas de segmentación pensadas para variables mixtas (por ejemplo K-Prototypes).
 
-## 15. Conclusiones
+## 16. Conclusiones
 
-1. **Diagnóstico:** la antigüedad y el tipo de contrato son los factores que más separan al cliente que se queda del que se va. El riesgo se concentra en contratos mes a mes, fibra óptica y pago con cheque electrónico.
-2. **Modelo:** Gradient Boosting balanceado obtuvo ROC-AUC de 0,848 y Average Precision de 0,663 en validación cruzada, y ROC-AUC de 0,845 en test. Los tres modelos rinden de forma muy similar (ROC-AUC entre 0,845 y 0,848 en validación cruzada), por lo que la elección se apoyó en el Average Precision y en que Gradient Boosting maneja bien el balanceo con pesos de muestra. Con el umbral de 0,69, el modelo alcanza una Precision de 0,651 y un Recall de 0,588.
-3. **Aplicación al negocio:** el umbral de decisión permite controlar el equilibrio entre Precision y Recall. En el conjunto de prueba, pasar de 0,50 a 0,69 reduce las falsas alarmas, pero también deja sin detectar a más clientes que abandonan. La elección debe depender de la prioridad operativa y validarse antes de una implementación real.
-4. **Segmentación:** se identificaron cuatro perfiles de clientes. C0 concentra el mayor riesgo (47,3 % de churn) y es el grupo prioritario; C2 agrupa a los clientes más antiguos y de mayor facturación, y C3 tiene el riesgo más bajo.
-5. **Ética y límites:** no hay diferencias relevantes por género, pero sí una disparidad en los falsos positivos de adultos mayores (22,58 % contra 9,88 %) que requiere mitigación. Además, la segmentación tiene una estructura moderada.
-
-El modelo debe usarse como una **herramienta de apoyo**. Antes de implementarlo en una empresa real habría que validarlo con información actual, definir el umbral según los objetivos operativos, monitorear sesgos y mantener supervisión humana en las decisiones de retención.
+1. **Diagnóstico:** la antigüedad y el tipo de contrato son los factores que más separan a quien se queda de quien se va. El riesgo se concentra en contratos mes a mes, fibra óptica y pago con cheque electrónico.
+2. **Modelo:** los tres modelos rinden de forma muy similar. Seleccionamos **Gradient Boosting balanceado** (ROC-AUC CV 0,848, Average Precision CV 0,663, ROC-AUC test 0,845). Con umbral 0,50 detecta el **80,7 %** de los clientes que abandonan; el balanceo de clases fue clave, ya que sin él el Recall cae a 50 %.
+3. **Segmentación:** identificamos 4 perfiles con riesgos entre 7,4 % y 47,3 %. Esto permite diferenciar las acciones de retención en lugar de aplicar una sola campaña. La estructura de los clusters es moderada, por lo que los usamos como guía comercial y no como fronteras exactas.
+4. **Ética:** no hay diferencias relevantes por género, pero sí una brecha en falsos positivos en adultos mayores (48,39 % vs. 25,36 %) que requiere mitigación y revisión humana antes de un uso real.
+5. **Cierre:** el modelo es una **herramienta de apoyo**. Antes de usarlo en una empresa real habría que validarlo con datos actuales, calibrar el umbral con costos reales y monitorear sesgos.
