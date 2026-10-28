@@ -87,7 +87,7 @@ Trabajamos en Python con Google Colab y las librerías pandas, NumPy, Matplotlib
 Revisamos el tamaño del dataset, los tipos de dato, los valores nulos, los duplicados y los estadísticos de las variables numéricas.
 
 - **Nulos:** en la versión limpia, `TotalCharges` ya está en formato numérico y los valores faltantes se trataron antes del modelamiento.
-- **Duplicados:** hay **22 filas repetidas (0,3 %)**. Como el dataset no tiene `customerID`, no podemos saber si son el mismo cliente o dos clientes distintos con el mismo perfil, así que decidimos **conservarlas**.
+- **Duplicados:** hay **22 filas repetidas (0,3 %)**. Como el dataset lo limpiamos nosotras en la evaluación anterior podemos asegurar que apesar de no contar con  `CustomerID` son clientes distintos.
 - **`TotalCharges = 0`:** corresponde a **11 clientes con `tenure = 0`** (clientes nuevos que todavía no reciben su primera factura). Son registros válidos, por lo que se mantuvieron.
 
 ### 5.2 Variable objetivo
