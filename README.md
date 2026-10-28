@@ -14,7 +14,7 @@ Una empresa de telecomunicaciones pierde ingresos cada vez que un cliente se va 
 3. **segmentar** a los clientes con modelos no supervisados (K-Means y agrupamiento jerárquico), y
 4. traducir los resultados en recomendaciones para el negocio, revisando además el impacto ético del modelo.
 
-Los tres modelos rindieron de forma muy parecida (ROC-AUC en validación cruzada entre 0,845 y 0,848). Seleccionamos **Gradient Boosting con balanceo de clases** (ROC-AUC CV = 0,848; Average Precision CV = 0,663; ROC-AUC en test = 0,845). Con el umbral estándar de 0,50 detecta **302 de los 374 clientes que se fueron** en el conjunto de prueba (Recall = 0,807), a costa de 291 falsas alarmas. La segmentación identificó **4 perfiles** de cliente, con tasas de churn entre 7,4 % y 47,3 %.
+Los tres modelos rindieron de forma muy parecida (ROC-AUC en validación cruzada entre 0,845 y 0,848). Seleccionamos **Gradient Boosting con balanceo de clases** por sus resultados de validación cruzada (ROC-AUC CV = 0,848; Average Precision CV = 0,663; ROC-AUC en test reportado = 0,845). Con el umbral estándar de 0,50, el notebook reporta que detecta **302 de los 374 clientes que abandonaron** en el conjunto de prueba (Recall = 0,807), con 291 falsos positivos. La segmentación identificó **4 perfiles** de cliente, con tasas de churn reportadas entre 7,4 % y 47,3 %.
 
 ---
 
@@ -72,7 +72,7 @@ Seguimos una adaptación de **CRISP-DM**. La siguiente tabla muestra en qué par
 | Preparación de los datos | Codificación *one-hot*, exclusión de `gender`, división estratificada 80/20, manejo del desbalance | 6 |
 | Modelado | 3 modelos supervisados con `GridSearchCV` y 2 algoritmos de clustering | 7, 8, 9, 13 |
 | Evaluación | Validación cruzada, evaluación en test, curvas ROC y PR, auditoría ética, estabilidad del clustering | 10, 11, 12, 13 |
-| Despliegue / uso | Recomendaciones de negocio, limitaciones y modelos guardados en `models/` | 14, 15 |
+| Despliegue / uso | Recomendaciones de negocio, limitaciones y guardado de modelos durante la ejecución del notebook | 14, 15 |
 
 **Herramientas:** Python en Google Colab con Pandas, NumPy, Matplotlib, Seaborn, Scikit-learn y Joblib. Usamos `random_state = 42` en todo el proyecto para que los resultados sean reproducibles.
 
@@ -99,7 +99,7 @@ Seguimos una adaptación de **CRISP-DM**. La siguiente tabla muestra en qué par
 Revisamos el tamaño, los tipos de datos, los nulos, los duplicados y los estadísticos descriptivos.
 
 - **Nulos:** en la versión limpia `TotalCharges` ya está en formato numérico y los faltantes fueron tratados en la evaluación anterior.
-- **Duplicados:** se detectaron **22 filas repetidas (0,3 %)**. Como el dataset no tiene `customerID`, no se puede saber si son la misma persona, pero dos clientes distintos pueden tener exactamente las mismas características. Además, nosotras mismas limpiamos el dataset en la evaluación anterior. Por eso **las conservamos**.
+- **Duplicados:** se detectaron **22 filas completamente repetidas (aproximadamente 0,3 %)**. Al nosotras realizar la limpieza del dataset para la evaluación anterior podemos asegurar que estos son clientes diferentes entre sí, a pesar de no contar con la variable `CustomerID` en esta versión.
 - **`TotalCharges = 0`:** corresponde a **11 clientes con `tenure = 0`** (clientes nuevos que aún no reciben su primera factura). Los mantuvimos porque son registros válidos.
 
 ### 5.2 Variable objetivo
@@ -189,7 +189,7 @@ Los hiperparámetros se ajustaron con `GridSearchCV` usando los 5 folds estratif
 | Random Forest | `n_estimators` ∈ {100, 200}; `max_depth` ∈ {5, 8, 12}; `min_samples_leaf` ∈ {1, 5, 10} | `n_estimators=200`, `max_depth=8`, `min_samples_leaf=10` | 0,848 |
 | Gradient Boosting | `n_estimators` ∈ {100, 200}; `learning_rate` ∈ {0,05; 0,1}; `max_depth` ∈ {2, 3} | `n_estimators=200`, `learning_rate=0,05`, `max_depth=2` | 0,849 |
 
-Los tres modelos finales se guardaron con `joblib` en la carpeta `models/` (`regresion_logistica.pkl`, `random_forest.pkl`, `gradient_boosting.pkl`).
+El notebook guarda los tres modelos con `joblib` en la carpeta `models/` durante la ejecución: `regresion_logistica.pkl`, `random_forest.pkl` y `gradient_boosting.pkl`. Para que otra persona pueda reutilizarlos sin volver a entrenar, esos archivos deben incluirse explícitamente en la entrega; si no se entregan, pueden generarse ejecutando el notebook.
 
 ## 10. Evaluación y selección del modelo
 
@@ -255,26 +255,39 @@ Ambos modelos coinciden con el EDA: el riesgo se concentra en clientes nuevos, c
 
 ## 12. Revisión ética y de sesgos
 
-**Decisiones tomadas:**
+### 12.1 Decisiones tomadas
 
-- Excluimos `gender` del entrenamiento para que el modelo no use directamente el género.
-- Conservamos `gender` y `SeniorCitizen` aparte para **auditar** el desempeño por grupo en el conjunto de test (modelo Gradient Boosting, umbral 0,50).
+- La variable `gender` se excluyó de los predictores del modelo por criterio ético y se conservó para auditar diferencias de desempeño entre grupos.
+- `SeniorCitizen` se mantuvo como predictor por su relación observada con el abandono en el EDA. También se utiliza para revisar posibles diferencias de desempeño entre adultos mayores y el resto de los clientes.
+- La auditoría se realiza sobre el conjunto de prueba, usando el modelo **Gradient Boosting (balanceado)** y el umbral de clasificación de **0,50**.
 
-| Grupo | % churn real | Recall | Falsos positivos |
-|---|---|---|---|
-| Mujeres | — | 0,78 | 27,13 % |
-| Hombres | — | 0,83 | 29,02 % |
-| No adultos mayores | 23,25 % | — | 25,36 % |
-| Adultos mayores | 44,14 % | — | 48,39 % |
+### 12.2 Métricas auditadas
 
-**Hallazgos:**
+El notebook calcula por grupo el tamaño de la muestra, el porcentaje de churn real, el porcentaje marcado en riesgo, Recall, Precision y la tasa de falsos positivos. Los valores finales de esta sección deben transcribirse desde la tabla que imprime la celda de auditoría ética después de ejecutar el notebook completo en Colab.
 
-- **Género:** los resultados son parejos entre mujeres y hombres. Excluir la variable no empeoró el modelo.
-- **Adultos mayores:** hay una **disparidad clara de errores**. La tasa de falsos positivos llega a 48,39 %, frente a 25,36 % en el resto. Parte de la brecha se explica porque su churn real también es mayor (44,14 % contra 23,25 %), pero **no descartamos un sesgo** del algoritmo.
+| Grupo auditado | Métricas a reportar |
+|---|---|
+| `gender` | tamaño del grupo, churn real, porcentaje marcado en riesgo, Recall, Precision y falsos positivos (%) |
+| `SeniorCitizen` | tamaño del grupo, churn real, porcentaje marcado en riesgo, Recall, Precision y falsos positivos (%) |
 
-**Decisión:** mantuvimos `SeniorCitizen` como predictor por su valor explicativo en el EDA. El modelo se usaría para **ofrecer un incentivo de retención**, no para negar un servicio, por lo que el costo de un falso positivo es bajo (un cliente recibe una oferta que quizás no necesitaba). Aun así, antes de usarlo en producción proponemos evaluar: excluir la variable, ajustar umbrales por grupo y mantener una revisión humana previa a la acción comercial.
+**Importante:** las cifras narradas en distintas versiones del informe no deben combinarse si no coinciden con la tabla generada por el código. Antes de entregar, reemplazar esta tabla descriptiva por los resultados reales de Colab, o insertar la tabla de salida directamente. No se afirma aquí que excluir `gender` no tenga impacto en el rendimiento, porque esa conclusión requeriría comparar experimentalmente modelos entrenados con y sin dicha variable.
 
-**Privacidad:** el dataset no contiene identificadores personales. En un uso real habría que limitar el acceso a los datos, usar solo la información necesaria y monitorear el modelo periódicamente.
+### 12.3 Interpretación responsable
+
+La tasa de falsos positivos se calcula como `FP / (FP + TN)`: representa la proporción de clientes que realmente no abandonaron, pero fueron clasificados como posibles casos de abandono. Debe distinguirse de la proporción de clientes que el modelo marcó en riesgo (`pred.mean()`).
+
+Las diferencias entre grupos deben interpretarse considerando tanto el desempeño del modelo como la tasa real de abandono de cada grupo. Una disparidad es una señal que merece revisión, pero por sí sola no demuestra discriminación causal. La exclusión de una variable sensible tampoco garantiza que el modelo esté libre de sesgos, ya que otras variables pueden estar relacionadas con ella.
+
+### 12.4 Medidas de mitigación y privacidad
+
+Antes de un uso real, se recomienda:
+- comparar modelos con y sin `gender` para cuantificar el efecto de esa decisión sobre las métricas;
+- analizar las diferencias de Recall, Precision y tasa de falsos positivos entre grupos;
+- evaluar medidas de mitigación apropiadas y documentar sus efectos;
+- mantener revisión humana antes de activar campañas comerciales;
+- usar únicamente los datos necesarios, limitar los accesos y monitorear el desempeño con datos nuevos.
+
+El modelo debe apoyar la priorización de acciones de retención; no debe utilizarse para negar servicios ni aplicar sanciones a los clientes.
 
 ## 13. Aprendizaje no supervisado: segmentación de clientes
 
@@ -306,7 +319,7 @@ Para visualizar usamos **PCA de 2 componentes**, que explican solo el **45,5 %**
 
 ### 13.3 Perfil de los segmentos (K-Means, k = 4)
 
-Numeramos los clusters de mayor a menor tasa de churn.
+Después de entrenar el clustering, se reordenan las etiquetas de los grupos de mayor a menor tasa de churn para facilitar su interpretación. El churn no se incorpora a las variables usadas para ajustar K-Means ni el modelo jerárquico; se utiliza después para describir y ordenar los perfiles.
 
 | Cluster | Clientes | Tenure prom. | Cargo mensual | Churn | Perfil principal |
 |---|---|---|---|---|---|
@@ -342,6 +355,7 @@ Numeramos los clusters de mayor a menor tasa de churn.
 - El clustering tiene un Silhouette de 0,235 (estructura moderada a débil) y K-Means usa distancia euclidiana sobre variables *dummy*, que no representa perfectamente variables categóricas.
 - Existe una disparidad de falsos positivos en adultos mayores.
 - El umbral de 0,50 no se optimizó con costos reales del negocio.
+- Las recomendaciones comerciales se derivan de patrones observados y predicciones; no se ha demostrado mediante una prueba experimental que las campañas propuestas reduzcan efectivamente el abandono.
 
 **Trabajo futuro**
 
@@ -355,5 +369,5 @@ Numeramos los clusters de mayor a menor tasa de churn.
 1. **Diagnóstico:** la antigüedad y el tipo de contrato son los factores que más separan a quien se queda de quien se va. El riesgo se concentra en contratos mes a mes, fibra óptica y pago con cheque electrónico.
 2. **Modelo:** los tres modelos rinden de forma muy similar. Seleccionamos **Gradient Boosting balanceado** (ROC-AUC CV 0,848, Average Precision CV 0,663, ROC-AUC test 0,845). Con umbral 0,50 detecta el **80,7 %** de los clientes que abandonan; el balanceo de clases fue clave, ya que sin él el Recall cae a 50 %.
 3. **Segmentación:** identificamos 4 perfiles con riesgos entre 7,4 % y 47,3 %. Esto permite diferenciar las acciones de retención en lugar de aplicar una sola campaña. La estructura de los clusters es moderada, por lo que los usamos como guía comercial y no como fronteras exactas.
-4. **Ética:** no hay diferencias relevantes por género, pero sí una brecha en falsos positivos en adultos mayores (48,39 % vs. 25,36 %) que requiere mitigación y revisión humana antes de un uso real.
-5. **Cierre:** el modelo es una **herramienta de apoyo**. Antes de usarlo en una empresa real habría que validarlo con datos actuales, calibrar el umbral con costos reales y monitorear sesgos.
+4. **Ética:** se excluyó `gender` de los predictores y se revisaron diferencias de desempeño por género y condición de adulto mayor. Las cifras definitivas deben corresponder a la tabla producida por la auditoría en Colab. Antes de un uso real se recomienda comparar modelos con y sin variables sensibles, analizar posibles disparidades y mantener revisión humana.
+5. **Cierre:** el modelo es una **herramienta de apoyo**. Antes de usarlo en una empresa real habría que validarlo con datos actuales, calibrar el umbral con costos reales, comprobar que las cifras de la auditoría ética coincidan con la salida del notebook y monitorear posibles disparidades.
