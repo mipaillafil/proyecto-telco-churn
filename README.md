@@ -35,7 +35,7 @@ Los tres modelos rindieron de forma muy parecida (ROC-AUC en validación cruzada
 13. [Aprendizaje no supervisado: segmentación de clientes](#13-aprendizaje-no-supervisado-segmentación-de-clientes)
 14. [Recomendaciones de negocio](#14-recomendaciones-de-negocio)
 15. [Limitaciones y trabajo futuro](#15-limitaciones-y-trabajo-futuro)
-16. [Conclusiones](#16-conclusiones)
+16. [Instrucciones de ejecución](#16-instrucciones-de-ejecución)\n17. [Conclusiones](#17-conclusiones)
 
 ---
 
@@ -99,7 +99,7 @@ Seguimos una adaptación de **CRISP-DM**. La siguiente tabla muestra en qué par
 Revisamos el tamaño, los tipos de datos, los nulos, los duplicados y los estadísticos descriptivos.
 
 - **Nulos:** en la versión limpia `TotalCharges` ya está en formato numérico y los faltantes fueron tratados en la evaluación anterior.
-- **Duplicados:** se detectaron **22 filas completamente repetidas (aproximadamente 0,3 %)**. Al nosotras realizar la limpieza del dataset para la evaluación anterior podemos asegurar que estos son clientes diferentes entre sí, a pesar de no contar con la variable `CustomerID` en esta versión.
+- **Duplicados:** se detectaron **22 filas con todos sus valores coincidentes (aproximadamente 0,3 %)**. Según la revisión y el proceso de limpieza realizado en la evaluación anterior, estos registros corresponden a clientes diferentes y se conservaron en el dataset. Aunque esta versión no incluye la columna `customerID`, la decisión se basa en la revisión previa de los datos; se recomienda mantener el respaldo de ese proceso para justificar el criterio si se solicita.
 - **`TotalCharges = 0`:** corresponde a **11 clientes con `tenure = 0`** (clientes nuevos que aún no reciben su primera factura). Los mantuvimos porque son registros válidos.
 
 ### 5.2 Variable objetivo
@@ -364,7 +364,29 @@ Después de entrenar el clustering, se reordenan las etiquetas de los grupos de 
 - Validar el modelo con datos nuevos y monitorear cambios en el comportamiento de los clientes.
 - Comparar otras técnicas de segmentación pensadas para variables mixtas (por ejemplo K-Prototypes).
 
-## 16. Conclusiones
+## 16. Instrucciones de ejecución
+
+### Requisitos
+
+- Python y un entorno compatible con las bibliotecas utilizadas.
+- Google Colab o Jupyter Notebook.
+- El archivo `Telco_Customer_Churn_Clean.csv`.
+- Las bibliotecas Pandas, NumPy, Matplotlib, Seaborn, Scikit-learn y Joblib.
+
+### Pasos para ejecutar el proyecto
+
+1. Abrir el notebook del proyecto en Google Colab o Jupyter.
+2. Ubicar el archivo `Telco_Customer_Churn_Clean.csv` en la carpeta de datos correspondiente.
+3. Verificar que la ruta de `pd.read_csv()` coincida con la ubicación real del archivo. En la versión actual del notebook se utiliza `/content/data/Telco_Customer_Churn_Clean.csv`.
+4. Ejecutar las celdas en orden y comprobar que no existan errores.
+5. Revisar las métricas de clasificación, las tablas de auditoría ética y los perfiles de clustering que se generan.
+6. Confirmar que las imágenes se guarden en `images/` y los modelos en `models/`.
+
+Las carpetas `images/` y `models/` se crean durante la ejecución. Los archivos `.pkl` se generan al ejecutar el notebook y deben incluirse en la entrega si se requiere reutilizar los modelos sin volver a entrenarlos.
+
+**Verificación antes de entregar:** en la versión actual del notebook, la llamada `print(perfil('cluster_k2').to_string())` aparece antes de la definición de la función `perfil()`. Debe moverse después de la definición de la función para que el notebook pueda ejecutarse de principio a fin en orden. También se deben actualizar las cifras de la auditoría ética con los resultados impresos por la ejecución final.
+
+## 17. Conclusiones
 
 1. **Diagnóstico:** la antigüedad y el tipo de contrato son los factores que más separan a quien se queda de quien se va. El riesgo se concentra en contratos mes a mes, fibra óptica y pago con cheque electrónico.
 2. **Modelo:** los tres modelos rinden de forma muy similar. Seleccionamos **Gradient Boosting balanceado** (ROC-AUC CV 0,848, Average Precision CV 0,663, ROC-AUC test 0,845). Con umbral 0,50 detecta el **80,7 %** de los clientes que abandonan; el balanceo de clases fue clave, ya que sin él el Recall cae a 50 %.
