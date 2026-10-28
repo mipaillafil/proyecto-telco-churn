@@ -30,7 +30,7 @@
 
 En este proyecto trabajamos con el dataset *Telco Customer Churn* de IBM (7.043 clientes) para predecir qué clientes tienen más probabilidad de abandonar una empresa de telecomunicaciones y para agruparlos en segmentos con características similares. Comparamos tres modelos supervisados de clasificación (Regresión Logística, Random Forest y Gradient Boosting) y aplicamos K-Means y clustering jerárquico como modelos no supervisados.
 
-Los tres modelos supervisados dieron resultados muy parecidos (ROC-AUC en validación cruzada entre 0,845 y 0,848). Elegimos **Gradient Boosting balanceado** por tener el mejor ROC-AUC y Average Precision en validación cruzada, y le ajustamos el umbral de decisión a **0,69** usando solo datos de entrenamiento y una función de beneficio económico. En el conjunto de prueba obtuvo ROC-AUC de 0,845, Precision de 0,651 y Recall de 0,588 con ese umbral. La segmentación con K-Means (k = 4) permitió identificar cuatro perfiles de clientes, con tasas de churn entre 7,4 % y 47,3 %.
+Los tres modelos supervisados dieron resultados muy parecidos (ROC-AUC en validación cruzada entre 0,845 y 0,848). Elegimos **Gradient Boosting balanceado** por tener el mejor ROC-AUC y Average Precision en validación cruzada, y analizamos distintos umbrales de decisión usando únicamente datos de entrenamiento, para estudiar el equilibrio entre Precision y Recall. En el conjunto de prueba, el umbral 0,69 ofrece mayor Precision que 0,50, aunque reduce el Recall. En el conjunto de prueba obtuvo ROC-AUC de 0,845, Precision de 0,651 y Recall de 0,588 con ese umbral. La segmentación con K-Means (k = 4) permitió identificar cuatro perfiles de clientes, con tasas de churn entre 7,4 % y 47,3 %.
 
 ---
 
@@ -55,7 +55,7 @@ Desarrollar y evaluar modelos de Machine Learning que permitan identificar clien
 3. Preparar las variables para el entrenamiento de los modelos.
 4. Construir y comparar tres modelos supervisados de clasificación: Regresión Logística, Random Forest y Gradient Boosting.
 5. Ajustar los hiperparámetros con validación cruzada y `GridSearchCV`.
-6. Evaluar los modelos con métricas adecuadas a un problema desbalanceado (Precision, Recall, F1, ROC-AUC y Average Precision) y estudiar el efecto del umbral de decisión en el beneficio económico.
+6. Evaluar los modelos con métricas adecuadas a un problema desbalanceado (Precision, Recall, F1, ROC-AUC y Average Precision) y estudiar el efecto del umbral de decisión en el equilibrio entre Precision y Recall.
 7. Agrupar a los clientes con modelos no supervisados (K-Means y clustering jerárquico).
 8. Revisar el impacto ético del modelo, en particular posibles diferencias de error entre grupos.
 9. Proponer recomendaciones de negocio a partir de los resultados.
@@ -259,40 +259,11 @@ Para el Gradient Boosting balanceado, en el conjunto de prueba (374 clientes rea
 
 Al subir el umbral de 0,50 a 0,69 las falsas alarmas bajan de 291 a 118, es decir, se evita ofrecer descuentos a muchos clientes que no se iban a ir. El costo es que quedan sin detectar 154 clientes que sí se van (antes eran 72). Esta diferencia es importante para el negocio, porque permite dirigir la campaña a un grupo más chico y más certero.
 
-**Cómo elegimos el umbral:** buscamos el umbral que maximiza un **beneficio económico estimado**, usando solo las predicciones fuera de fold del conjunto de entrenamiento. El conjunto de prueba **no** se usó para elegirlo, para no ajustar la decisión final sobre los datos con que se evalúa. El resultado fue **0,69**.
+**Selección del umbral:** se compararon distintos umbrales a partir de las predicciones fuera de fold del conjunto de entrenamiento, sin utilizar el conjunto de prueba para tomar esta decisión. El umbral 0,69 representa una alternativa con mayor Precision y menor Recall que el umbral estándar de 0,50. Su conveniencia operativa debe evaluarse según los objetivos de la empresa y, si corresponde, con información real de costos y retención.
 
 ![Beneficio según umbral](images/beneficio_segun_umbral.png)
 
-### 10.4 Impacto económico
-
-El cálculo usa **supuestos ilustrativos, que no son datos reales de una empresa**. El ingreso mensual sale del dataset (promedio de `MonthlyCharges`); el resto lo definimos nosotras:
-
-| Supuesto | Valor |
-|---|---|
-| Margen | 40 % |
-| Horizonte | 12 meses |
-| Descuento de retención | 15 % |
-| Costo de contactar a un cliente | 5 |
-| Aceptación de la oferta (caso base) | 30 % |
-
-La función de beneficio suma la ganancia por retener a clientes que se iban y aceptaron la oferta, y resta el descuento regalado a clientes que no se iban y el costo de contactar a todos los marcados como riesgo.
-
-Beneficio estimado en el conjunto de prueba, según la tasa de aceptación de la oferta:
-
-| Aceptación | Sin modelo | Ofertar a todos | Umbral 0,50 | Umbral 0,69 |
-|---|---|---|---|---|
-| 10 % | 0 | −11.844 | −490 | 1.209 |
-| 20 % | 0 | −16.643 | 1.985 | 4.107 |
-| 30 % | 0 | −21.442 | 4.461 | **7.006** |
-| 50 % | 0 | −31.039 | 9.411 | 12.804 |
-
-- Con 30 % de aceptación, el umbral 0,69 logra el mayor beneficio (7.006), por sobre el umbral 0,50 (4.461).
-- **Ofertar a todos no es viable**, ya que pierde dinero en todos los escenarios.
-- Con solo 10 % de aceptación, el umbral 0,50 genera pérdidas (−490), mientras que el 0,69 sigue siendo rentable (1.209).
-- También probamos un umbral de 0,20 para maximizar el recall: con 30 % de aceptación da una pérdida de −3.468. Esto muestra que **maximizar el recall destruye valor**, porque se regalan descuentos a muchos falsos positivos.
-- El umbral óptimo calculado en train varía solo entre 0,69 y 0,71 según la tasa de aceptación, por lo que es bastante estable. Con datos reales habría que recalibrarlo.
-
-### 10.5 Variables más importantes
+### 10.4 Variables más importantes
 
 ![Top 10 variables, Random Forest](images/importancia_variables_rf.png)
 
@@ -389,7 +360,7 @@ Usamos PCA solo para visualizar los clusters en dos dimensiones. Los dos primero
 | **C2 (clientes de valor)** | Tienen poco churn, pero son antiguos y de alta facturación. Conviene evitar descuentos masivos innecesarios y usar beneficios de fidelización para cuidar la relación. |
 | **C3 (riesgo bajo)** | Monitoreo de bajo costo y sin campañas agresivas, porque casi no abandonan. |
 
-Para las campañas predictivas, recomendamos usar el puntaje del modelo con el **umbral de 0,69**, combinarlo con criterios de negocio y mantener **revisión humana**, en vez de automatizar la decisión por completo. Los beneficios calculados dependen de la tasa de aceptación real de las ofertas, por lo que conviene medirla en una campaña piloto antes de escalar.
+Para las campañas predictivas, se puede considerar el puntaje del modelo con un umbral de decisión de **0,69** si la prioridad es obtener mayor Precision, combinándolo con criterios de negocio y manteniendo **revisión humana**, en vez de automatizar la decisión por completo. El umbral debe ajustarse según los objetivos de retención y los resultados observados en una campaña piloto.
 
 ## 14. Limitaciones y trabajo futuro
 
@@ -397,7 +368,6 @@ Para las campañas predictivas, recomendamos usar el puntaje del modelo con el *
 
 - El dataset es histórico y puede no representar a los clientes actuales de una empresa real.
 - Los resultados son asociaciones predictivas, no relaciones causales.
-- Los valores monetarios son **supuestos ilustrativos** y deberían reemplazarse por costos, márgenes y tasas de aceptación reales.
 - La segmentación con k = 4 tiene un Silhouette de 0,235, por lo que existe solapamiento entre grupos.
 - K-Means usa distancia euclidiana sobre variables *dummy*, lo que limita la representación de variables categóricas.
 - La auditoría mostró más falsos positivos en adultos mayores, lo que debe investigarse antes de usar el modelo en producción.
@@ -407,7 +377,7 @@ Para las campañas predictivas, recomendamos usar el puntaje del modelo con el *
 **Trabajo futuro**
 
 - Validar el modelo con datos nuevos y monitorear cambios en el comportamiento de los clientes.
-- Recalibrar el umbral con costos y tasas de aceptación reales.
+- Revisar y ajustar el umbral según las prioridades operativas y los resultados de campañas de retención reales.
 - Medir el efecto de excluir `SeniorCitizen` y probar un umbral por grupo.
 - Ampliar la búsqueda de hiperparámetros (por ejemplo con `RandomizedSearchCV`) para confirmar que los valores del borde de las grillas no se pueden mejorar.
 - Comparar otras técnicas de segmentación (por ejemplo, algoritmos pensados para variables categóricas).
@@ -416,8 +386,8 @@ Para las campañas predictivas, recomendamos usar el puntaje del modelo con el *
 
 1. **Diagnóstico:** la antigüedad y el tipo de contrato son los factores que más separan al cliente que se queda del que se va. El riesgo se concentra en contratos mes a mes, fibra óptica y pago con cheque electrónico.
 2. **Modelo:** Gradient Boosting balanceado obtuvo ROC-AUC de 0,848 y Average Precision de 0,663 en validación cruzada, y ROC-AUC de 0,845 en test. Los tres modelos rinden de forma muy similar (ROC-AUC entre 0,845 y 0,848 en validación cruzada), por lo que la elección se apoyó en el Average Precision y en que Gradient Boosting maneja bien el balanceo con pesos de muestra. Con el umbral de 0,69, el modelo alcanza una Precision de 0,651 y un Recall de 0,588.
-3. **Negocio:** bajo los supuestos del informe, el umbral 0,69 genera un beneficio estimado de 7.006 con 30 % de aceptación, contra 4.461 del umbral 0,50, y sigue siendo positivo con solo 10 % de aceptación. Ofertar a todos, o usar un umbral que maximice el recall, genera pérdidas.
+3. **Aplicación al negocio:** el umbral de decisión permite controlar el equilibrio entre Precision y Recall. En el conjunto de prueba, pasar de 0,50 a 0,69 reduce las falsas alarmas, pero también deja sin detectar a más clientes que abandonan. La elección debe depender de la prioridad operativa y validarse antes de una implementación real.
 4. **Segmentación:** se identificaron cuatro perfiles de clientes. C0 concentra el mayor riesgo (47,3 % de churn) y es el grupo prioritario; C2 agrupa a los clientes más antiguos y de mayor facturación, y C3 tiene el riesgo más bajo.
-5. **Ética y límites:** no hay diferencias relevantes por género, pero sí una disparidad en los falsos positivos de adultos mayores (22,58 % contra 9,88 %) que requiere mitigación. Además, los valores monetarios son simulados y la segmentación tiene una estructura moderada.
+5. **Ética y límites:** no hay diferencias relevantes por género, pero sí una disparidad en los falsos positivos de adultos mayores (22,58 % contra 9,88 %) que requiere mitigación. Además, la segmentación tiene una estructura moderada.
 
-El modelo debe usarse como una **herramienta de apoyo**. Antes de implementarlo en una empresa real habría que validarlo con información actual, reemplazar los supuestos económicos por datos reales, monitorear sesgos y mantener supervisión humana en las decisiones de retención.
+El modelo debe usarse como una **herramienta de apoyo**. Antes de implementarlo en una empresa real habría que validarlo con información actual, definir el umbral según los objetivos operativos, monitorear sesgos y mantener supervisión humana en las decisiones de retención.
